@@ -44,9 +44,7 @@ def get_next_departure(
     now = dt_util.now().replace(tzinfo=None) + offset
     now_date = now.strftime(dt_util.DATE_STR_FORMAT)
     yesterday = now - datetime.timedelta(days=1)
-    yesterday_date = yesterday.strftime(dt_util.DATE_STR_FORMAT)
     tomorrow = now + datetime.timedelta(days=1)
-    tomorrow_date = tomorrow.strftime(dt_util.DATE_STR_FORMAT)
 
     # Fetch all departures for yesterday, today and optionally tomorrow,
     # up to an overkill maximum in case of a departure every minute for those
@@ -118,7 +116,7 @@ def get_next_departure(
         limit=limit,
     )
 
-    timetable = create_lookup_timetable(departures, now_date, tomorrow_date, yesterday_date)
+    timetable = create_lookup_timetable(departures, now_date, tomorrow, yesterday)
 
     _LOGGER.debug("Timetable: %s", sorted(timetable.keys()))
 
@@ -162,9 +160,6 @@ def get_next_departure(
         f"{trip_candidate['dest_depart_time']}"
     )
 
-    depart_time = dt_util.parse_datetime(origin_depart_time)
-    arrival_time = dt_util.parse_datetime(dest_arrival_time)
-
     origin_stop_time = {
         "Arrival Time": origin_arrival_time,
         "Departure Time": origin_depart_time,
@@ -187,6 +182,9 @@ def get_next_departure(
         "Timepoint": trip_candidate["dest_stop_timepoint"],
     }
 
+    depart_time = dt_util.parse_datetime(origin_depart_time)
+    arrival_time = dt_util.parse_datetime(dest_arrival_time)
+
     return {
         "trip_id": trip_candidate["trip_id"],
         "route_id": trip_candidate["route_id"],
@@ -203,12 +201,15 @@ def get_next_departure(
 def create_lookup_timetable(
         departures: Any,
         now_date: str,
-        tomorrow_date: str,
-        yesterday_date: str,
+        tomorrow: datetime,
+        yesterday: datetime,
 ):
     # Create lookup timetable for today and possibly tomorrow, taking into
     # account any departures from yesterday scheduled after midnight,
     # as long as all departures are within the calendar date range.
+    yesterday_date = yesterday.strftime(dt_util.DATE_STR_FORMAT)
+    tomorrow_date = tomorrow.strftime(dt_util.DATE_STR_FORMAT)
+
     timetable = {}
     yesterday_start = today_start = tomorrow_start = None
     yesterday_last = today_last = ""
