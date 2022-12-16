@@ -10,7 +10,7 @@ from typing import Any
 import pygtfs
 from sqlalchemy.sql import text
 
-from components.gtfs.constants import ATTR_ARRIVAL, ATTR_BICYCLE, ATTR_DAY, ATTR_FIRST, ATTR_DROP_OFF_DESTINATION, \
+from components.gtfs.const import ATTR_ARRIVAL, ATTR_BICYCLE, ATTR_DAY, ATTR_FIRST, ATTR_DROP_OFF_DESTINATION, \
     ATTR_DROP_OFF_ORIGIN, ATTR_INFO, ATTR_OFFSET, ATTR_LAST, ATTR_LOCATION_DESTINATION, ATTR_LOCATION_ORIGIN, \
     ATTR_PICKUP_DESTINATION, ATTR_PICKUP_ORIGIN, ATTR_ROUTE_TYPE, ATTR_TIMEPOINT_DESTINATION, ATTR_TIMEPOINT_ORIGIN, \
     ATTR_WHEELCHAIR, ATTR_WHEELCHAIR_DESTINATION, ATTR_WHEELCHAIR_ORIGIN, CONF_DATA, CONF_DESTINATION, CONF_ORIGIN, \
@@ -118,52 +118,7 @@ def get_next_departure(
         limit=limit,
     )
 
-    # Create lookup timetable for today and possibly tomorrow, taking into
-    # account any departures from yesterday scheduled after midnight,
-    # as long as all departures are within the calendar date range.
-    timetable = {}
-    yesterday_start = today_start = tomorrow_start = None
-    yesterday_last = today_last = ""
-
-    for departure in departures:
-        if departure["yesterday"] == 1 and yesterday_date >= departure["start_date"]:
-            extras = {"day": "yesterday", "first": None, "last": False}
-            if yesterday_start is None:
-                yesterday_start = departure["origin_depart_date"]
-            if yesterday_start != departure["origin_depart_date"]:
-                idx = f"{now_date} {departure['origin_depart_time']}"
-                timetable[idx] = {**departure, **extras}
-                yesterday_last = idx
-
-        if departure["today"] == 1:
-            extras = {"day": "today", "first": False, "last": False}
-            if today_start is None:
-                today_start = departure["origin_depart_date"]
-                extras["first"] = True
-            if today_start == departure["origin_depart_date"]:
-                idx_prefix = now_date
-            else:
-                idx_prefix = tomorrow_date
-            idx = f"{idx_prefix} {departure['origin_depart_time']}"
-            timetable[idx] = {**departure, **extras}
-            today_last = idx
-
-        if (
-            "tomorrow" in departure
-            and departure["tomorrow"] == 1
-            and tomorrow_date <= departure["end_date"]
-        ):
-            extras = {"day": "tomorrow", "first": False, "last": None}
-            if tomorrow_start is None:
-                tomorrow_start = departure["origin_depart_date"]
-                extras["first"] = True
-            if tomorrow_start == departure["origin_depart_date"]:
-                idx = f"{tomorrow_date} {departure['origin_depart_time']}"
-                timetable[idx] = {**departure, **extras}
-
-    # Flag last departures.
-    for idx in filter(None, [yesterday_last, today_last]):
-        timetable[idx]["last"] = True
+    timetable = create_lookup_timetable(departures, now_date, tomorrow_date, yesterday_date)
 
     _LOGGER.debug("Timetable: %s", sorted(timetable.keys()))
 
@@ -243,6 +198,61 @@ def get_next_departure(
         "origin_stop_time": origin_stop_time,
         "destination_stop_time": destination_stop_time,
     }
+
+
+def create_lookup_timetable(
+        departures: Any,
+        now_date: str,
+        tomorrow_date: str,
+        yesterday_date: str,
+):
+    # Create lookup timetable for today and possibly tomorrow, taking into
+    # account any departures from yesterday scheduled after midnight,
+    # as long as all departures are within the calendar date range.
+    timetable = {}
+    yesterday_start = today_start = tomorrow_start = None
+    yesterday_last = today_last = ""
+    for departure in departures:
+        if departure["yesterday"] == 1 and yesterday_date >= departure["start_date"]:
+            extras = {"day": "yesterday", "first": None, "last": False}
+            if yesterday_start is None:
+                yesterday_start = departure["origin_depart_date"]
+            if yesterday_start != departure["origin_depart_date"]:
+                idx = f"{now_date} {departure['origin_depart_time']}"
+                timetable[idx] = {**departure, **extras}
+                yesterday_last = idx
+
+        if departure["today"] == 1:
+            extras = {"day": "today", "first": False, "last": False}
+            if today_start is None:
+                today_start = departure["origin_depart_date"]
+                extras["first"] = True
+            if today_start == departure["origin_depart_date"]:
+                idx_prefix = now_date
+            else:
+                idx_prefix = tomorrow_date
+            idx = f"{idx_prefix} {departure['origin_depart_time']}"
+            timetable[idx] = {**departure, **extras}
+            today_last = idx
+
+        if (
+                "tomorrow" in departure
+                and departure["tomorrow"] == 1
+                and tomorrow_date <= departure["end_date"]
+        ):
+            extras = {"day": "tomorrow", "first": False, "last": None}
+            if tomorrow_start is None:
+                tomorrow_start = departure["origin_depart_date"]
+                extras["first"] = True
+            if tomorrow_start == departure["origin_depart_date"]:
+                idx = f"{tomorrow_date} {departure['origin_depart_time']}"
+                timetable[idx] = {**departure, **extras}
+
+    # Flag last departures.
+    for idx in filter(None, [yesterday_last, today_last]):
+        timetable[idx]["last"] = True
+
+    return timetable
 
 
 def setup_platform(
