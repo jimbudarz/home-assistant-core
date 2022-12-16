@@ -9,14 +9,20 @@ from typing import Any
 
 import pygtfs
 from sqlalchemy.sql import text
-import voluptuous as vol
 
+from components.gtfs.constants import ATTR_ARRIVAL, ATTR_BICYCLE, ATTR_DAY, ATTR_FIRST, ATTR_DROP_OFF_DESTINATION, \
+    ATTR_DROP_OFF_ORIGIN, ATTR_INFO, ATTR_OFFSET, ATTR_LAST, ATTR_LOCATION_DESTINATION, ATTR_LOCATION_ORIGIN, \
+    ATTR_PICKUP_DESTINATION, ATTR_PICKUP_ORIGIN, ATTR_ROUTE_TYPE, ATTR_TIMEPOINT_DESTINATION, ATTR_TIMEPOINT_ORIGIN, \
+    ATTR_WHEELCHAIR, ATTR_WHEELCHAIR_DESTINATION, ATTR_WHEELCHAIR_ORIGIN, CONF_DATA, CONF_DESTINATION, CONF_ORIGIN, \
+    CONF_TOMORROW, DEFAULT_NAME, DEFAULT_PATH, BICYCLE_ALLOWED_DEFAULT, BICYCLE_ALLOWED_OPTIONS, DROP_OFF_TYPE_DEFAULT, \
+    DROP_OFF_TYPE_OPTIONS, ICON, ICONS, LOCATION_TYPE_DEFAULT, LOCATION_TYPE_OPTIONS, PICKUP_TYPE_DEFAULT, \
+    PICKUP_TYPE_OPTIONS, ROUTE_TYPE_OPTIONS, TIMEPOINT_DEFAULT, TIMEPOINT_OPTIONS, WHEELCHAIR_ACCESS_DEFAULT, \
+    WHEELCHAIR_ACCESS_OPTIONS, WHEELCHAIR_BOARDING_DEFAULT, WHEELCHAIR_BOARDING_OPTIONS
 from homeassistant.components.sensor import (
-    PLATFORM_SCHEMA as SENSOR_PLATFORM_SCHEMA,
     SensorDeviceClass,
     SensorEntity,
 )
-from homeassistant.const import ATTR_ATTRIBUTION, CONF_NAME, CONF_OFFSET, STATE_UNKNOWN
+from homeassistant.const import ATTR_ATTRIBUTION, CONF_NAME, CONF_OFFSET
 from homeassistant.core import HomeAssistant
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -25,244 +31,6 @@ from homeassistant.util import slugify
 import homeassistant.util.dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
-
-ATTR_ARRIVAL = "arrival"
-ATTR_BICYCLE = "trip_bikes_allowed_state"
-ATTR_DAY = "day"
-ATTR_FIRST = "first"
-ATTR_DROP_OFF_DESTINATION = "destination_stop_drop_off_type_state"
-ATTR_DROP_OFF_ORIGIN = "origin_stop_drop_off_type_state"
-ATTR_INFO = "info"
-ATTR_OFFSET = CONF_OFFSET
-ATTR_LAST = "last"
-ATTR_LOCATION_DESTINATION = "destination_station_location_type_name"
-ATTR_LOCATION_ORIGIN = "origin_station_location_type_name"
-ATTR_PICKUP_DESTINATION = "destination_stop_pickup_type_state"
-ATTR_PICKUP_ORIGIN = "origin_stop_pickup_type_state"
-ATTR_ROUTE_TYPE = "route_type_name"
-ATTR_TIMEPOINT_DESTINATION = "destination_stop_timepoint_exact"
-ATTR_TIMEPOINT_ORIGIN = "origin_stop_timepoint_exact"
-ATTR_WHEELCHAIR = "trip_wheelchair_access_available"
-ATTR_WHEELCHAIR_DESTINATION = "destination_station_wheelchair_boarding_available"
-ATTR_WHEELCHAIR_ORIGIN = "origin_station_wheelchair_boarding_available"
-
-CONF_DATA = "data"
-CONF_DESTINATION = "destination"
-CONF_ORIGIN = "origin"
-CONF_TOMORROW = "include_tomorrow"
-
-DEFAULT_NAME = "GTFS Sensor"
-DEFAULT_PATH = "gtfs"
-
-BICYCLE_ALLOWED_DEFAULT = STATE_UNKNOWN
-BICYCLE_ALLOWED_OPTIONS = {1: True, 2: False}
-DROP_OFF_TYPE_DEFAULT = STATE_UNKNOWN
-DROP_OFF_TYPE_OPTIONS = {
-    0: "Regular",
-    1: "Not Available",
-    2: "Call Agency",
-    3: "Contact Driver",
-}
-ICON = "mdi:train"
-ICONS = {
-    0: "mdi:tram",
-    1: "mdi:subway",
-    2: "mdi:train",
-    3: "mdi:bus",
-    4: "mdi:ferry",
-    5: "mdi:train-variant",
-    6: "mdi:gondola",
-    7: "mdi:stairs",
-    100: "mdi:train",
-    101: "mdi:train",
-    102: "mdi:train",
-    103: "mdi:train",
-    104: "mdi:train-car",
-    105: "mdi:train",
-    106: "mdi:train",
-    107: "mdi:train",
-    108: "mdi:train",
-    109: "mdi:train",
-    110: "mdi:train-variant",
-    111: "mdi:train-variant",
-    112: "mdi:train-variant",
-    113: "mdi:train-variant",
-    114: "mdi:train-variant",
-    115: "mdi:train-variant",
-    116: "mdi:train-variant",
-    117: "mdi:train-variant",
-    200: "mdi:bus",
-    201: "mdi:bus",
-    202: "mdi:bus",
-    203: "mdi:bus",
-    204: "mdi:bus",
-    205: "mdi:bus",
-    206: "mdi:bus",
-    207: "mdi:bus",
-    208: "mdi:bus",
-    209: "mdi:bus",
-    400: "mdi:subway-variant",
-    401: "mdi:subway-variant",
-    402: "mdi:subway",
-    403: "mdi:subway-variant",
-    404: "mdi:subway-variant",
-    405: "mdi:subway-variant",
-    700: "mdi:bus",
-    701: "mdi:bus",
-    702: "mdi:bus",
-    703: "mdi:bus",
-    704: "mdi:bus",
-    705: "mdi:bus",
-    706: "mdi:bus",
-    707: "mdi:bus",
-    708: "mdi:bus",
-    709: "mdi:bus",
-    710: "mdi:bus",
-    711: "mdi:bus",
-    712: "mdi:bus-school",
-    713: "mdi:bus-school",
-    714: "mdi:bus",
-    715: "mdi:bus",
-    716: "mdi:bus",
-    800: "mdi:bus",
-    900: "mdi:tram",
-    901: "mdi:tram",
-    902: "mdi:tram",
-    903: "mdi:tram",
-    904: "mdi:tram",
-    905: "mdi:tram",
-    906: "mdi:tram",
-    1000: "mdi:ferry",
-    1100: "mdi:airplane",
-    1200: "mdi:ferry",
-    1300: "mdi:airplane",
-    1400: "mdi:gondola",
-    1500: "mdi:taxi",
-    1501: "mdi:taxi",
-    1502: "mdi:ferry",
-    1503: "mdi:train-variant",
-    1504: "mdi:bicycle-basket",
-    1505: "mdi:taxi",
-    1506: "mdi:car-multiple",
-    1507: "mdi:taxi",
-    1700: "mdi:train-car",
-    1702: "mdi:horse-variant",
-}
-LOCATION_TYPE_DEFAULT = "Stop"
-LOCATION_TYPE_OPTIONS = {
-    0: "Station",
-    1: "Stop",
-    2: "Station Entrance/Exit",
-    3: "Other",
-}
-PICKUP_TYPE_DEFAULT = STATE_UNKNOWN
-PICKUP_TYPE_OPTIONS = {
-    0: "Regular",
-    1: "None Available",
-    2: "Call Agency",
-    3: "Contact Driver",
-}
-ROUTE_TYPE_OPTIONS = {
-    0: "Tram",
-    1: "Subway",
-    2: "Rail",
-    3: "Bus",
-    4: "Ferry",
-    5: "Cable Tram",
-    6: "Aerial Lift",
-    7: "Funicular",
-    100: "Railway Service",
-    101: "High Speed Rail Service",
-    102: "Long Distance Trains",
-    103: "Inter Regional Rail Service",
-    104: "Car Transport Rail Service",
-    105: "Sleeper Rail Service",
-    106: "Regional Rail Service",
-    107: "Tourist Railway Service",
-    108: "Rail Shuttle (Within Complex)",
-    109: "Suburban Railway",
-    110: "Replacement Rail Service",
-    111: "Special Rail Service",
-    112: "Lorry Transport Rail Service",
-    113: "All Rail Services",
-    114: "Cross-Country Rail Service",
-    115: "Vehicle Transport Rail Service",
-    116: "Rack and Pinion Railway",
-    117: "Additional Rail Service",
-    200: "Coach Service",
-    201: "International Coach Service",
-    202: "National Coach Service",
-    203: "Shuttle Coach Service",
-    204: "Regional Coach Service",
-    205: "Special Coach Service",
-    206: "Sightseeing Coach Service",
-    207: "Tourist Coach Service",
-    208: "Commuter Coach Service",
-    209: "All Coach Services",
-    400: "Urban Railway Service",
-    401: "Metro Service",
-    402: "Underground Service",
-    403: "Urban Railway Service",
-    404: "All Urban Railway Services",
-    405: "Monorail",
-    700: "Bus Service",
-    701: "Regional Bus Service",
-    702: "Express Bus Service",
-    703: "Stopping Bus Service",
-    704: "Local Bus Service",
-    705: "Night Bus Service",
-    706: "Post Bus Service",
-    707: "Special Needs Bus",
-    708: "Mobility Bus Service",
-    709: "Mobility Bus for Registered Disabled",
-    710: "Sightseeing Bus",
-    711: "Shuttle Bus",
-    712: "School Bus",
-    713: "School and Public Service Bus",
-    714: "Rail Replacement Bus Service",
-    715: "Demand and Response Bus Service",
-    716: "All Bus Services",
-    800: "Trolleybus Service",
-    900: "Tram Service",
-    901: "City Tram Service",
-    902: "Local Tram Service",
-    903: "Regional Tram Service",
-    904: "Sightseeing Tram Service",
-    905: "Shuttle Tram Service",
-    906: "All Tram Services",
-    1000: "Water Transport Service",
-    1100: "Air Service",
-    1200: "Ferry Service",
-    1300: "Aerial Lift Service",
-    1400: "Funicular Service",
-    1500: "Taxi Service",
-    1501: "Communal Taxi Service",
-    1502: "Water Taxi Service",
-    1503: "Rail Taxi Service",
-    1504: "Bike Taxi Service",
-    1505: "Licensed Taxi Service",
-    1506: "Private Hire Service Vehicle",
-    1507: "All Taxi Services",
-    1700: "Miscellaneous Service",
-    1702: "Horse-drawn Carriage",
-}
-TIMEPOINT_DEFAULT = True
-TIMEPOINT_OPTIONS = {0: False, 1: True}
-WHEELCHAIR_ACCESS_DEFAULT = STATE_UNKNOWN
-WHEELCHAIR_ACCESS_OPTIONS = {1: True, 2: False}
-WHEELCHAIR_BOARDING_DEFAULT = STATE_UNKNOWN
-WHEELCHAIR_BOARDING_OPTIONS = {1: True, 2: False}
-
-PLATFORM_SCHEMA = SENSOR_PLATFORM_SCHEMA.extend(
-    {
-        vol.Required(CONF_ORIGIN): cv.string,
-        vol.Required(CONF_DESTINATION): cv.string,
-        vol.Required(CONF_DATA): cv.string,
-        vol.Optional(CONF_NAME): cv.string,
-        vol.Optional(CONF_OFFSET, default=0): cv.time_period,
-        vol.Optional(CONF_TOMORROW, default=False): cv.boolean,
-    }
-)
 
 
 def get_next_departure(
@@ -293,7 +61,7 @@ def get_next_departure(
         tomorrow_order = f"calendar.{tomorrow_name} DESC,"
 
     sql_query = f"""
-        SELECT trip.trip_id, trip.route_id,
+        SELECT trip_candidate.trip_id, trip_candidate.route_id,
                time(origin_stop_time.arrival_time) AS origin_arrival_time,
                time(origin_stop_time.departure_time) AS origin_depart_time,
                date(origin_stop_time.departure_time) AS origin_depart_date,
@@ -316,15 +84,15 @@ def get_next_departure(
                {tomorrow_select}
                calendar.start_date AS start_date,
                calendar.end_date AS end_date
-        FROM trips trip
+        FROM trips trip_candidate
         INNER JOIN calendar calendar
-                   ON trip.service_id = calendar.service_id
+                   ON trip_candidate.service_id = calendar.service_id
         INNER JOIN stop_times origin_stop_time
-                   ON trip.trip_id = origin_stop_time.trip_id
+                   ON trip_candidate.trip_id = origin_stop_time.trip_id
         INNER JOIN stops start_station
                    ON origin_stop_time.stop_id = start_station.stop_id
         INNER JOIN stop_times destination_stop_time
-                   ON trip.trip_id = destination_stop_time.trip_id
+                   ON trip_candidate.trip_id = destination_stop_time.trip_id
         INNER JOIN stops end_station
                    ON destination_stop_time.stop_id = end_station.stop_id
         WHERE (calendar.{yesterday.strftime("%A").lower()} = 1
@@ -342,7 +110,7 @@ def get_next_departure(
                  origin_stop_time.departure_time
         LIMIT :limit
         """
-    result = schedule.engine.execute(
+    departures = schedule.engine.execute(
         text(sql_query),
         origin_station_id=start_station_id,
         end_station_id=end_station_id,
@@ -357,41 +125,41 @@ def get_next_departure(
     yesterday_start = today_start = tomorrow_start = None
     yesterday_last = today_last = ""
 
-    for row in result:
-        if row["yesterday"] == 1 and yesterday_date >= row["start_date"]:
+    for departure in departures:
+        if departure["yesterday"] == 1 and yesterday_date >= departure["start_date"]:
             extras = {"day": "yesterday", "first": None, "last": False}
             if yesterday_start is None:
-                yesterday_start = row["origin_depart_date"]
-            if yesterday_start != row["origin_depart_date"]:
-                idx = f"{now_date} {row['origin_depart_time']}"
-                timetable[idx] = {**row, **extras}
+                yesterday_start = departure["origin_depart_date"]
+            if yesterday_start != departure["origin_depart_date"]:
+                idx = f"{now_date} {departure['origin_depart_time']}"
+                timetable[idx] = {**departure, **extras}
                 yesterday_last = idx
 
-        if row["today"] == 1:
+        if departure["today"] == 1:
             extras = {"day": "today", "first": False, "last": False}
             if today_start is None:
-                today_start = row["origin_depart_date"]
+                today_start = departure["origin_depart_date"]
                 extras["first"] = True
-            if today_start == row["origin_depart_date"]:
+            if today_start == departure["origin_depart_date"]:
                 idx_prefix = now_date
             else:
                 idx_prefix = tomorrow_date
-            idx = f"{idx_prefix} {row['origin_depart_time']}"
-            timetable[idx] = {**row, **extras}
+            idx = f"{idx_prefix} {departure['origin_depart_time']}"
+            timetable[idx] = {**departure, **extras}
             today_last = idx
 
         if (
-            "tomorrow" in row
-            and row["tomorrow"] == 1
-            and tomorrow_date <= row["end_date"]
+            "tomorrow" in departure
+            and departure["tomorrow"] == 1
+            and tomorrow_date <= departure["end_date"]
         ):
             extras = {"day": "tomorrow", "first": False, "last": None}
             if tomorrow_start is None:
-                tomorrow_start = row["origin_depart_date"]
+                tomorrow_start = departure["origin_depart_date"]
                 extras["first"] = True
-            if tomorrow_start == row["origin_depart_date"]:
-                idx = f"{tomorrow_date} {row['origin_depart_time']}"
-                timetable[idx] = {**row, **extras}
+            if tomorrow_start == departure["origin_depart_date"]:
+                idx = f"{tomorrow_date} {departure['origin_depart_time']}"
+                timetable[idx] = {**departure, **extras}
 
     # Flag last departures.
     for idx in filter(None, [yesterday_last, today_last]):
@@ -399,44 +167,44 @@ def get_next_departure(
 
     _LOGGER.debug("Timetable: %s", sorted(timetable.keys()))
 
-    item = {}
+    trip_candidate = {}
     for key in sorted(timetable.keys()):
         if dt_util.parse_datetime(key) > now:
-            item = timetable[key]
+            trip_candidate = timetable[key]
             _LOGGER.debug(
-                "Departure found for station %s @ %s -> %s", start_station_id, key, item
+                "Departure found for station %s @ %s -> %s", start_station_id, key, trip_candidate
             )
             break
 
-    if item == {}:
+    if trip_candidate == {}:
         return {}
 
     # Format arrival and departure dates and times, accounting for the
     # possibility of times crossing over midnight.
     origin_arrival = now
-    if item["origin_arrival_time"] > item["origin_depart_time"]:
+    if trip_candidate["origin_arrival_time"] > trip_candidate["origin_depart_time"]:
         origin_arrival -= datetime.timedelta(days=1)
     origin_arrival_time = (
         f"{origin_arrival.strftime(dt_util.DATE_STR_FORMAT)} "
-        f"{item['origin_arrival_time']}"
+        f"{trip_candidate['origin_arrival_time']}"
     )
 
-    origin_depart_time = f"{now_date} {item['origin_depart_time']}"
+    origin_depart_time = f"{now_date} {trip_candidate['origin_depart_time']}"
 
     dest_arrival = now
-    if item["dest_arrival_time"] < item["origin_depart_time"]:
+    if trip_candidate["dest_arrival_time"] < trip_candidate["origin_depart_time"]:
         dest_arrival += datetime.timedelta(days=1)
     dest_arrival_time = (
         f"{dest_arrival.strftime(dt_util.DATE_STR_FORMAT)} "
-        f"{item['dest_arrival_time']}"
+        f"{trip_candidate['dest_arrival_time']}"
     )
 
     dest_depart = dest_arrival
-    if item["dest_depart_time"] < item["dest_arrival_time"]:
+    if trip_candidate["dest_depart_time"] < trip_candidate["dest_arrival_time"]:
         dest_depart += datetime.timedelta(days=1)
     dest_depart_time = (
         f"{dest_depart.strftime(dt_util.DATE_STR_FORMAT)} "
-        f"{item['dest_depart_time']}"
+        f"{trip_candidate['dest_depart_time']}"
     )
 
     depart_time = dt_util.parse_datetime(origin_depart_time)
@@ -445,31 +213,31 @@ def get_next_departure(
     origin_stop_time = {
         "Arrival Time": origin_arrival_time,
         "Departure Time": origin_depart_time,
-        "Drop Off Type": item["origin_drop_off_type"],
-        "Pickup Type": item["origin_pickup_type"],
-        "Shape Dist Traveled": item["origin_dist_traveled"],
-        "Headsign": item["origin_stop_headsign"],
-        "Sequence": item["origin_stop_sequence"],
-        "Timepoint": item["origin_stop_timepoint"],
+        "Drop Off Type": trip_candidate["origin_drop_off_type"],
+        "Pickup Type": trip_candidate["origin_pickup_type"],
+        "Shape Dist Traveled": trip_candidate["origin_dist_traveled"],
+        "Headsign": trip_candidate["origin_stop_headsign"],
+        "Sequence": trip_candidate["origin_stop_sequence"],
+        "Timepoint": trip_candidate["origin_stop_timepoint"],
     }
 
     destination_stop_time = {
         "Arrival Time": dest_arrival_time,
         "Departure Time": dest_depart_time,
-        "Drop Off Type": item["dest_drop_off_type"],
-        "Pickup Type": item["dest_pickup_type"],
-        "Shape Dist Traveled": item["dest_dist_traveled"],
-        "Headsign": item["dest_stop_headsign"],
-        "Sequence": item["dest_stop_sequence"],
-        "Timepoint": item["dest_stop_timepoint"],
+        "Drop Off Type": trip_candidate["dest_drop_off_type"],
+        "Pickup Type": trip_candidate["dest_pickup_type"],
+        "Shape Dist Traveled": trip_candidate["dest_dist_traveled"],
+        "Headsign": trip_candidate["dest_stop_headsign"],
+        "Sequence": trip_candidate["dest_stop_sequence"],
+        "Timepoint": trip_candidate["dest_stop_timepoint"],
     }
 
     return {
-        "trip_id": item["trip_id"],
-        "route_id": item["route_id"],
-        "day": item["day"],
-        "first": item["first"],
-        "last": item["last"],
+        "trip_id": trip_candidate["trip_id"],
+        "route_id": trip_candidate["route_id"],
+        "day": trip_candidate["day"],
+        "first": trip_candidate["first"],
+        "last": trip_candidate["last"],
         "departure_time": depart_time,
         "arrival_time": arrival_time,
         "origin_stop_time": origin_stop_time,
